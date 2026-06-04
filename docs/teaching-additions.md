@@ -47,17 +47,73 @@ Browser / Python          Flask app on the server          SQLite (medical.db)
 
 ---
 
-## B) New section — "Want a database in YOUR IA?"
+## B) New section — "Build your own database for your IA"
 
-> The class API is also a **template you can copy** for your Internal Assessment:
-> 1. Get the project: `github.com/tanasel/ishflask` (or ask your teacher for the folder).
-> 2. Replace `databases/medical.db` with **your own** `.db`.
-> 3. In `app.py`, write your **own** routes (your own SQL queries) — *this* is the part that
->    counts as your IA work. The template just gives you a safe, working starting point.
-> 4. Run it locally for your video (`flask --app app run`), or deploy your own copy.
+*Paste the block below into the doc after Option 2. (The same content is also a standalone, print-ready student handout: `handouts/ishflask_Student_IA_Handout.docx`.)*
+
+> ### Build your own database app for your IA
 >
-> ⚠️ The example is **read-only** and uses **made-up data**. Never put real personal data in a
-> database you publish online — anyone could read it.
+> The class API ("ishflask") is also a **template you can copy** for your Internal Assessment. It is a safe, working starting point — your job is to make it your own.
+>
+> **Do you even need this?**  If your IA is a simple tool, plain Python + `sqlite3` (no web app) is a perfectly good IA and is simpler. Use this template only if you want a **web app / API** — a program that answers requests with data.
+>
+> **⚠️ What counts as YOUR work:**  your IA must be your own programming. The template is just a skeleton — you must supply your own database, your own routes, and your own SQL. **Do not submit the medical example.**
+>
+> **Step 1 — Design your database.**  In DB Browser for SQLite, create your own tables, fields and relationships for your topic (a gym, a library, a booking system…). Save it as `mydata.db`.
+>
+> **Step 2 — Get the template.**
+> ```
+> git clone https://github.com/tanasel/ishflask.git my-ia
+> cd my-ia
+> ```
+> Then copy your `mydata.db` into the `databases/` folder.
+>
+> **Step 3 — Write your own routes** (this is your IA work). In `app.py`, delete the medical examples and write routes for your own tables:
+> ```python
+> @app.get("/members")
+> def members():
+>     return jsonify(query_db("databases/mydata.db",
+>                             "SELECT * FROM Members"))
+> ```
+> Add the searches, filters and JOINs your project needs.
+>
+> **Step 4 — Let your app add and change data.**  The template only *reads* (it is read-only, for safety). A real app adds, edits and deletes records — this is where you show INSERT / UPDATE / DELETE (syllabus A3.3.3):
+> ```python
+> import sqlite3
+>
+> def write_db(sql, args=()):
+>     conn = sqlite3.connect("databases/mydata.db")  # not read-only
+>     conn.execute(sql, args)
+>     conn.commit(); conn.close()
+>
+> @app.post("/members")
+> def add_member():
+>     d = request.get_json()
+>     write_db("INSERT INTO Members (Name, Email) VALUES (?, ?)",
+>              (d["name"], d["email"]))
+>     return jsonify({"status": "added"})
+> ```
+> Always use `?` placeholders for values — never paste user input straight into an SQL string (that is how SQL injection happens).
+>
+> **Step 5 — Run it for your video.**
+> ```
+> python3 -m venv .venv
+> source .venv/bin/activate        # Windows: .venv\Scripts\activate
+> pip install -r requirements.txt
+> flask --app app run              # open http://127.0.0.1:5000
+> ```
+> You do not need to host it online — running on your own laptop is fine for the 5-minute video.
+>
+> **Your checklist — "is this really mine?"**
+> - ☐ My own database design (tables, fields, relationships)
+> - ☐ My own routes in `app.py`
+> - ☐ My own SQL queries, including at least one JOIN
+> - ☐ Add / edit / delete works — not just read
+> - ☐ I removed the medical example
+>
+> **Safety:** use made-up / sample data only. Never put real personal data in a database you publish online — anyone could read it.
+
+*Teacher note (do not paste): a student who only swaps the `.db` and changes nothing else has not demonstrated the programming — the routes and the read + write logic must be their own.*
 
 ---
 
