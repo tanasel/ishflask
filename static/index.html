@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IB CS Medical API</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101010;
+      --panel: #181818;
+      --panel-strong: #202020;
+      --line: #333333;
+      --text: #f2f2f2;
+      --muted: #b8b8b8;
+      --accent: #20c997;
+      --accent-dark: #148565;
+      --warm: #f2b84b;
+      --danger: #f06a7a;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.5;
+    }
+
+    main {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 40px 0;
+    }
+
+    header {
+      margin-bottom: 28px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 2.25rem;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    p {
+      max-width: 760px;
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr);
+      gap: 20px;
+      align-items: start;
+    }
+
+    .controls,
+    .results {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .controls {
+      padding: 18px;
+    }
+
+    .results {
+      min-height: 360px;
+      overflow: hidden;
+    }
+
+    .control-group {
+      display: grid;
+      gap: 10px;
+      padding: 0 0 18px;
+      margin-bottom: 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .control-group:last-child {
+      padding-bottom: 0;
+      margin-bottom: 0;
+      border-bottom: 0;
+    }
+
+    label,
+    .group-title {
+      color: var(--text);
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+
+    button,
+    select,
+    input {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel-strong);
+      color: var(--text);
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+      border-color: var(--accent-dark);
+      background: var(--accent-dark);
+      font-weight: 700;
+    }
+
+    button:hover,
+    button:focus-visible {
+      background: var(--accent);
+      color: #07120f;
+      outline: none;
+    }
+
+    select,
+    input {
+      padding: 0 12px;
+    }
+
+    input:focus-visible,
+    select:focus-visible {
+      border-color: var(--accent);
+      outline: 2px solid var(--accent-dark);
+      outline-offset: 2px;
+    }
+
+    .search-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 92px;
+      gap: 8px;
+    }
+
+    .search-row button {
+      min-width: 0;
+    }
+
+    .status {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel-strong);
+      color: var(--muted);
+      min-height: 52px;
+    }
+
+    .status.error {
+      color: var(--danger);
+    }
+
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 560px;
+    }
+
+    th,
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--warm);
+      background: #141414;
+      font-size: 0.9rem;
+    }
+
+    td {
+      color: var(--text);
+    }
+
+    .empty {
+      padding: 24px;
+      color: var(--muted);
+    }
+
+    @media (max-width: 780px) {
+      main {
+        width: min(100% - 24px, 720px);
+        padding: 28px 0;
+      }
+
+      h1 {
+        font-size: 1.85rem;
+      }
+
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>IB CS Medical API</h1>
+      <p>A small Flask and SQLite JSON API for practicing client-server database requests with fictional sample data.</p>
+    </header>
+
+    <div class="workspace">
+      <section class="controls" aria-label="API controls">
+        <div class="control-group">
+          <div class="group-title">Patients</div>
+          <button id="loadPatients" type="button">Load all patients</button>
+        </div>
+
+        <div class="control-group">
+          <label for="doctorSelect">Doctor appointments</label>
+          <select id="doctorSelect">
+            <option value="D1">D1 - Dr. Hare</option>
+            <option value="D2">D2 - Dr. Tanasel</option>
+            <option value="D3">D3 - Dr. Lira</option>
+            <option value="D4">D4 - Dr. Okonkwo</option>
+            <option value="D5">D5 - Dr. Fernandez</option>
+            <option value="D6">D6 - Dr. Patel</option>
+            <option value="D7">D7 - Dr. Nguyen</option>
+            <option value="D8">D8 - Dr. Schmidt</option>
+          </select>
+          <button id="loadAppointments" type="button">Load appointments</button>
+        </div>
+
+        <form class="control-group" id="searchForm">
+          <label for="patientSearch">Patient search</label>
+          <div class="search-row">
+            <input id="patientSearch" name="name" type="search" placeholder="Anika">
+            <button type="submit">Search</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="results" aria-live="polite">
+        <div id="status" class="status">Choose a request to view JSON rows as a table.</div>
+        <div id="resultArea" class="table-wrap">
+          <div class="empty">No rows loaded.</div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const statusEl = document.getElementById("status");
+    const resultArea = document.getElementById("resultArea");
+    const doctorSelect = document.getElementById("doctorSelect");
+    const patientSearch = document.getElementById("patientSearch");
+
+    function setStatus(message, isError) {
+      statusEl.textContent = message;
+      statusEl.classList.toggle("error", Boolean(isError));
+    }
+
+    function renderRows(rows) {
+      resultArea.innerHTML = "";
+
+      if (!rows.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "No matching rows.";
+        resultArea.appendChild(empty);
+        return;
+      }
+
+      const columns = Object.keys(rows[0]);
+      const table = document.createElement("table");
+      const thead = document.createElement("thead");
+      const tbody = document.createElement("tbody");
+
+      const headerRow = document.createElement("tr");
+      columns.forEach((column) => {
+        const th = document.createElement("th");
+        th.textContent = column;
+        headerRow.appendChild(th);
+      });
+      thead.appendChild(headerRow);
+
+      rows.forEach((row) => {
+        const tr = document.createElement("tr");
+        columns.forEach((column) => {
+          const td = document.createElement("td");
+          td.textContent = row[column];
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+
+      table.appendChild(thead);
+      table.appendChild(tbody);
+      resultArea.appendChild(table);
+    }
+
+    async function loadRows(path, label) {
+      setStatus("Loading " + label + "...", false);
+
+      try {
+        const response = await fetch(path);
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Request failed.");
+        }
+
+        renderRows(data);
+        setStatus(label + ": " + data.length + " row(s).", false);
+      } catch (error) {
+        renderRows([]);
+        setStatus(error.message, true);
+      }
+    }
+
+    document.getElementById("loadPatients").addEventListener("click", () => {
+      loadRows("/patients", "All patients");
+    });
+
+    document.getElementById("loadAppointments").addEventListener("click", () => {
+      const doctorId = doctorSelect.value;
+      loadRows("/appointments/" + encodeURIComponent(doctorId), "Appointments for " + doctorId);
+    });
+
+    document.getElementById("searchForm").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const name = patientSearch.value.trim();
+      loadRows("/patients/search?name=" + encodeURIComponent(name), "Patient search");
+    });
+  </script>
+</body>
+</html>
