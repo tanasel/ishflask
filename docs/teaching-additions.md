@@ -1,14 +1,15 @@
 # ishflask — ready-to-paste additions for the teaching doc + slides
 
 These are drafted for **Robin to paste into his own Google Doc / Slides** (his materials —
-not edited directly). All `api.ishweb.nl` URLs go live **once the app is deployed**
-(deploy currently blocked by an ICDSoft disk-space error — see project notes).
+not edited directly). ✅ **The API is LIVE at https://api.ishweb.nl** (deployed 5 Jun 2026) —
+every `api.ishweb.nl` URL below is real and clickable. The earlier ICDSoft "disk-space"
+error was a false alarm and did not recur.
 
 ---
 
 ## A) For the Python/SQLite doc — turn the abstract "Option 2" into a real example
 
-> **Try it live** (real, clickable once the API is deployed):
+> **Try it live** — real, clickable URLs (the API is live now):
 > - All patients (JSON): `https://api.ishweb.nl/patients`
 > - One doctor's appointments — a JOIN over HTTP: `https://api.ishweb.nl/appointments/D1`
 > - Search patients by name: `https://api.ishweb.nl/patients/search?name=Anika`
