@@ -56,7 +56,7 @@ Live API (open these in a browser):
 - https://api.ishweb.nl/db/medical/tables
 - https://api.ishweb.nl/db/medical/Patients?limit=10
 
-The `client_example.py` file shows the same requests from Python with `requests`; set `BASE_URL = "https://api.ishweb.nl"`.
+The `client_example.py` file shows the same requests from Python with `requests`; set `SERVER = "https://api.ishweb.nl"`.
 
 ## Add A Student Database (shared class API)
 

@@ -345,3 +345,54 @@ def test_query_sql_error_on_sandbox_returns_400(tmp_path, monkeypatch, client):
 
     assert response.status_code == 400
     assert "no such table" in response.get_json()["error"]
+
+
+def test_query_uppercase_shared_name_is_treated_as_shared_readonly(client):
+    # "MEDICAL.db" must map to the shared medical.db, not a new writable sandbox,
+    # so shared names cannot be shadowed by changing the case.
+    response = client.post(
+        "/query",
+        json={"database": "MEDICAL.db", "sql": "DELETE FROM Patients"},
+    )
+
+    assert response.status_code == 403
+    assert "shared, read-only class database" in response.get_json()["error"]
+    assert len(client.get("/patients").get_json()) == 25
+
+
+def test_query_mixed_case_shared_name_can_select(client):
+    response = client.post(
+        "/query",
+        json={"database": "Medical.DB", "sql": "SELECT COUNT(*) AS n FROM Patients"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["results"][0]["n"] == 25
+
+
+def test_query_sandbox_name_is_case_insensitive(tmp_path, monkeypatch, client):
+    # "Mine.db" and "mine.db" must resolve to the SAME sandbox file on every OS.
+    monkeypatch.setattr(app_module, "SANDBOX_DIR", str(tmp_path / "sandbox"))
+
+    client.post("/reseed", json={"database": "Mine.db"})
+    response = client.post(
+        "/query",
+        json={"database": "mine.db", "sql": "SELECT COUNT(*) AS n FROM Patients"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["results"][0]["n"] == 25
+
+
+def test_query_multiple_statements_returns_400_not_500(tmp_path, monkeypatch, client):
+    # Two statements raise sqlite3.Warning (not sqlite3.Error); it must be caught
+    # and returned as a clean 400, never an uncaught 500.
+    monkeypatch.setattr(app_module, "SANDBOX_DIR", str(tmp_path / "sandbox"))
+
+    response = client.post(
+        "/query",
+        json={"database": "scratch.db", "sql": "SELECT 1; SELECT 2"},
+    )
+
+    assert response.status_code == 400
+    assert "error" in response.get_json()

@@ -69,8 +69,18 @@ def database_path_for(db_name):
 
 
 def query_database_paths_for(filename):
-    """Validate a .db filename and return shared and sandbox candidate paths."""
-    if not isinstance(filename, str) or not filename.endswith(".db"):
+    """Validate a .db filename and return shared and sandbox candidate paths.
+
+    The name is lower-cased so it maps to the same file on every operating
+    system (some filesystems are case-insensitive). This keeps each student's
+    sandbox isolated and reserves shared names like medical.db no matter how
+    they are typed (e.g. MEDICAL.db cannot become a separate writable file).
+    """
+    if not isinstance(filename, str):
+        raise BadRequest("Invalid database name.")
+
+    filename = filename.lower()
+    if not filename.endswith(".db"):
         raise BadRequest("Invalid database name.")
 
     db_name = filename[:-3]
@@ -316,7 +326,10 @@ def query():
         finally:
             if conn is not None:
                 conn.close()
-    except sqlite3.Error as exc:
+    except (sqlite3.Error, sqlite3.Warning) as exc:
+        # sqlite3.Warning (e.g. "only execute one statement at a time") is NOT a
+        # subclass of sqlite3.Error, so it must be caught explicitly or it would
+        # surface as an uncaught 500.
         return jsonify({"error": str(exc)}), 400
 
 
