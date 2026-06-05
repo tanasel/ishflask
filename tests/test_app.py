@@ -184,3 +184,164 @@ def test_query_db_opens_connections_read_only():
         )
 
     assert "readonly" in str(exc_info.value).lower() or "read-only" in str(exc_info.value).lower()
+
+
+def test_api_index_lists_write_practice_endpoints(client):
+    response = client.get("/api")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert any(item["path"] == "/query" for item in data["write_practice"])
+    assert any(item["path"] == "/reseed" for item in data["write_practice"])
+
+
+def test_query_select_on_shared_medical_returns_row(client):
+    response = client.post(
+        "/query",
+        json={
+            "database": "medical.db",
+            "sql": "SELECT * FROM Patients WHERE PatientID = 'P1'",
+        },
+    )
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data["count"] == 1
+    assert data["results"] == [{"PatientID": "P1", "Patient": "Anika", "DOB": 1988}]
+
+
+def test_query_write_on_shared_medical_is_forbidden_and_unchanged(client):
+    response = client.post(
+        "/query",
+        json={
+            "database": "medical.db",
+            "sql": "DELETE FROM Patients",
+        },
+    )
+    patients_after = client.get("/patients").get_json()
+
+    assert response.status_code == 403
+    assert "shared, read-only class database" in response.get_json()["error"]
+    assert len(patients_after) == 25
+
+
+def test_query_sandbox_create_insert_select(tmp_path, monkeypatch, client):
+    monkeypatch.setattr(app_module, "SANDBOX_DIR", str(tmp_path / "sandbox"))
+
+    create_response = client.post(
+        "/query",
+        json={
+            "database": "student.db",
+            "sql": "CREATE TABLE Notes (NoteID INTEGER PRIMARY KEY, Body TEXT NOT NULL)",
+        },
+    )
+    insert_response = client.post(
+        "/query",
+        json={
+            "database": "student.db",
+            "sql": "INSERT INTO Notes (Body) VALUES ('First note')",
+        },
+    )
+    select_response = client.post(
+        "/query",
+        json={
+            "database": "student.db",
+            "sql": "SELECT NoteID, Body FROM Notes ORDER BY NoteID",
+        },
+    )
+
+    assert create_response.status_code == 200
+    assert create_response.get_json()["message"] == "Query executed"
+    assert insert_response.status_code == 200
+    assert insert_response.get_json()["rows_affected"] == 1
+    assert select_response.status_code == 200
+    assert select_response.get_json() == {
+        "results": [{"NoteID": 1, "Body": "First note"}],
+        "count": 1,
+    }
+
+
+def test_reseed_sandbox_then_insert_patient(tmp_path, monkeypatch, client):
+    monkeypatch.setattr(app_module, "SANDBOX_DIR", str(tmp_path / "sandbox"))
+
+    reseed_response = client.post("/reseed", json={"database": "yourname.db"})
+    insert_response = client.post(
+        "/query",
+        json={
+            "database": "yourname.db",
+            "sql": (
+                "INSERT INTO Patients (PatientID, Patient, DOB) "
+                "VALUES ('PX', 'Practice Patient', 2010)"
+            ),
+        },
+    )
+    select_response = client.post(
+        "/query",
+        json={
+            "database": "yourname.db",
+            "sql": "SELECT * FROM Patients WHERE PatientID = 'PX'",
+        },
+    )
+
+    assert reseed_response.status_code == 200
+    assert reseed_response.get_json() == {
+        "message": "Reseeded 'yourname.db' with a fresh copy of the medical data."
+    }
+    assert insert_response.status_code == 200
+    assert insert_response.get_json()["rows_affected"] == 1
+    assert select_response.status_code == 200
+    assert select_response.get_json() == {
+        "results": [{"PatientID": "PX", "Patient": "Practice Patient", "DOB": 2010}],
+        "count": 1,
+    }
+
+
+def test_reseed_shared_database_is_forbidden(client):
+    response = client.post("/reseed", json={"database": "medical.db"})
+
+    assert response.status_code == 403
+    assert "shared, read-only class database" in response.get_json()["error"]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"database": "medical.db"},
+        {"sql": "SELECT 1"},
+        {"database": "medical.db", "sql": ""},
+        {"database": "medical.db", "sql": "   "},
+        {"database": "medical.db", "sql": 123},
+    ],
+)
+def test_query_missing_fields_or_bad_sql_returns_400(client, payload):
+    response = client.post("/query", json=payload)
+
+    assert response.status_code == 400
+    assert "error" in response.get_json()
+
+
+@pytest.mark.parametrize(
+    "database",
+    ["medical", "bad.name.db", "../medical.db", "sandbox/other.db"],
+)
+def test_query_bad_or_traversal_database_name_returns_400(client, database):
+    response = client.post(
+        "/query",
+        json={"database": database, "sql": "SELECT 1"},
+    )
+
+    assert response.status_code == 400
+    assert "error" in response.get_json()
+
+
+def test_query_sql_error_on_sandbox_returns_400(tmp_path, monkeypatch, client):
+    monkeypatch.setattr(app_module, "SANDBOX_DIR", str(tmp_path / "sandbox"))
+
+    response = client.post(
+        "/query",
+        json={"database": "broken.db", "sql": "SELECT * FROM MissingTable"},
+    )
+
+    assert response.status_code == 400
+    assert "no such table" in response.get_json()["error"]

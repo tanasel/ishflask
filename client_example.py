@@ -1,44 +1,79 @@
 """
-Small client-side example for students.
+Beginner client for the ishflask teaching API.
 
-Run the Flask app locally first, then run:
+Install requests first if needed:
+
+    pip install requests
+
+Then run:
 
     python client_example.py
-
-This file uses the third-party requests package. Install it with
-``pip install requests`` if your Python environment does not have it yet.
 """
 
 import requests
 
 
-# Swap this for the live URL when deployed, for example:
-# BASE_URL = "https://api.ishweb.nl"
-BASE_URL = "http://127.0.0.1:5000"
+SERVER = "https://api.ishweb.nl"
+MY_DATABASE = "yourname.db"
 
 
-def get_json(path):
-    response = requests.get(BASE_URL + path, timeout=10)
+def post_json(path, payload):
+    """Send JSON to the API and print the JSON response."""
+    response = requests.post(SERVER + path, json=payload, timeout=10)
+    data = response.json()
+    print("\nPOST", path)
+    print("Status:", response.status_code)
+    print(data)
     response.raise_for_status()
-    return response.json()
+    return data
 
 
-def print_rows(title, rows):
-    print("\n" + title)
-    print("-" * len(title))
-    for row in rows:
-        print(row)
+def run_sql(database, sql):
+    """Run one SQL statement through POST /query."""
+    return post_json("/query", {"database": database, "sql": sql})
+
+
+def reseed(database):
+    """Copy fresh medical data into your own sandbox database."""
+    return post_json("/reseed", {"database": database})
 
 
 def main():
-    patients = get_json("/patients")
-    print_rows("All patients", patients)
+    # Shared class databases are read-only. SELECT is allowed.
+    run_sql(
+        "medical.db",
+        "SELECT PatientID, Patient, DOB FROM Patients WHERE PatientID = 'P1'",
+    )
 
-    appointments = get_json("/appointments/D1")
-    print_rows("Appointments for doctor D1", appointments)
+    # JOIN queries are also allowed on shared databases.
+    run_sql(
+        "medical.db",
+        """
+        SELECT p.Patient, d.Doctor, d.Specialisation
+        FROM Appointments a
+        JOIN Patients p ON a.PatientID = p.PatientID
+        JOIN Doctors d ON a.DoctorID = d.DoctorID
+        WHERE p.PatientID = 'P1'
+        """,
+    )
 
-    search_results = get_json("/patients/search?name=Anika")
-    print_rows("Patients matching Anika", search_results)
+    # Reseed your own sandbox before write practice.
+    reseed(MY_DATABASE)
+
+    # Sandbox databases allow INSERT, UPDATE, DELETE, and other write queries.
+    run_sql(
+        MY_DATABASE,
+        """
+        INSERT INTO Patients (PatientID, Patient, DOB)
+        VALUES ('P99', 'Your Name', 2008)
+        """,
+    )
+
+    # Read back the row you inserted.
+    run_sql(
+        MY_DATABASE,
+        "SELECT PatientID, Patient, DOB FROM Patients WHERE PatientID = 'P99'",
+    )
 
 
 if __name__ == "__main__":

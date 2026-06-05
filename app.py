@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 import sqlite3
 
 from flask import Flask, jsonify, request
@@ -10,6 +11,7 @@ from werkzeug.exceptions import BadRequest, NotFound
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATABASE_DIR = os.path.join(BASE_DIR, "databases")
 MEDICAL_DB_PATH = os.path.join(DATABASE_DIR, "medical.db")
+SANDBOX_DIR = os.path.join(DATABASE_DIR, "sandbox")
 
 DATABASE_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 TABLE_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
@@ -64,6 +66,42 @@ def database_path_for(db_name):
         raise NotFound("Database not found.")
 
     return candidate
+
+
+def query_database_paths_for(filename):
+    """Validate a .db filename and return shared and sandbox candidate paths."""
+    if not isinstance(filename, str) or not filename.endswith(".db"):
+        raise BadRequest("Invalid database name.")
+
+    db_name = filename[:-3]
+    if not DATABASE_NAME_RE.match(db_name):
+        raise BadRequest("Invalid database name.")
+
+    databases_root = os.path.realpath(DATABASE_DIR)
+    shared_candidate = os.path.realpath(os.path.join(databases_root, filename))
+    if os.path.commonpath([databases_root, shared_candidate]) != databases_root:
+        raise BadRequest("Invalid database path.")
+
+    sandbox_root = os.path.realpath(SANDBOX_DIR)
+    sandbox_candidate = os.path.realpath(os.path.join(sandbox_root, filename))
+    if os.path.commonpath([sandbox_root, sandbox_candidate]) != sandbox_root:
+        raise BadRequest("Invalid database path.")
+
+    return shared_candidate, sandbox_candidate
+
+
+def request_json_object():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        raise BadRequest("JSON body must be an object.")
+    return data
+
+
+def is_select_sql(sql):
+    stripped = sql.lstrip()
+    while stripped.startswith("("):
+        stripped = stripped[1:].lstrip()
+    return stripped.upper().startswith(("SELECT", "WITH"))
 
 
 def ensure_table_exists(db_path, table):
@@ -154,7 +192,19 @@ def api_index():
                     "description": "Read rows from a validated table.",
                 },
             ],
-            "safety": "All SQLite connections are opened read-only.",
+            "write_practice": [
+                {
+                    "method": "POST",
+                    "path": "/query",
+                    "description": "Run SELECT on shared databases or read/write SQL on your own sandbox database.",
+                },
+                {
+                    "method": "POST",
+                    "path": "/reseed",
+                    "description": "Copy fresh medical sample data into your own sandbox database.",
+                },
+            ],
+            "safety": "Shared class databases are read-only; sandbox databases are per-student read-write files.",
         }
     )
 
@@ -214,6 +264,76 @@ def table_rows(db_name, table):
     limit = parse_limit()
     rows = query_db(db_path, 'SELECT * FROM "%s" LIMIT ?' % table, (limit,))
     return jsonify(rows)
+
+
+@app.post("/query")
+def query():
+    data = request_json_object()
+    if "database" not in data or "sql" not in data:
+        raise BadRequest("database and sql are required.")
+
+    database = data["database"]
+    sql = data["sql"]
+    if not isinstance(sql, str) or not sql.strip():
+        raise BadRequest("sql must be a non-empty string.")
+
+    shared_path, sandbox_path = query_database_paths_for(database)
+    select_query = is_select_sql(sql)
+    is_shared = os.path.isfile(shared_path)
+
+    if is_shared and not select_query:
+        return (
+            jsonify(
+                {
+                    "error": (
+                        f"{database} is a shared, read-only class database. "
+                        "To practise INSERT/UPDATE/DELETE, use your own database, "
+                        'e.g. {"database": "yourname.db", "sql": "..."} '
+                        "(POST /reseed first to get your own copy of the data)."
+                    )
+                }
+            ),
+            403,
+        )
+
+    try:
+        if is_shared:
+            rows = query_db(shared_path, sql)
+            return jsonify({"results": rows, "count": len(rows)})
+
+        os.makedirs(os.path.dirname(sandbox_path), exist_ok=True)
+        conn = None
+        try:
+            conn = sqlite3.connect(sandbox_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(sql)
+            if select_query:
+                rows = [dict(row) for row in cursor.fetchall()]
+                return jsonify({"results": rows, "count": len(rows)})
+
+            conn.commit()
+            return jsonify({"message": "Query executed", "rows_affected": cursor.rowcount})
+        finally:
+            if conn is not None:
+                conn.close()
+    except sqlite3.Error as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@app.post("/reseed")
+def reseed():
+    data = request_json_object()
+    if "database" not in data:
+        raise BadRequest("database is required.")
+
+    database = data["database"]
+    shared_path, sandbox_path = query_database_paths_for(database)
+    if os.path.isfile(shared_path):
+        return jsonify({"error": f"{database} is a shared, read-only class database."}), 403
+
+    os.makedirs(os.path.dirname(sandbox_path), exist_ok=True)
+    shutil.copyfile(MEDICAL_DB_PATH, sandbox_path)
+    return jsonify({"message": f"Reseeded '{database}' with a fresh copy of the medical data."})
 
 
 if __name__ == "__main__":
