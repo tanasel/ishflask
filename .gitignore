@@ -10,3 +10,8 @@ __pycache__/
 .DS_Store
 *.log
 databases/sandbox/
+databases/sandbox/*.db
+databases/library.db
+databases/pokemon.db
+databases/gym.db
+databases/music.db

@@ -1,5 +1,7 @@
+import io
 import os
 import sqlite3
+import time
 
 import pytest
 
@@ -11,6 +13,20 @@ def client():
     app_module.app.config.update(TESTING=True)
     with app_module.app.test_client() as test_client:
         yield test_client
+
+
+def build_sqlite_db(path, table_name="Things"):
+    conn = sqlite3.connect(str(path))
+    conn.execute(f"CREATE TABLE {table_name} (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+    conn.execute(f"INSERT INTO {table_name} (name) VALUES ('example')")
+    conn.commit()
+    conn.close()
+
+
+def sqlite_upload_bytes(tmp_path, table_name="Things"):
+    db_path = tmp_path / "upload-source.db"
+    build_sqlite_db(db_path, table_name)
+    return db_path.read_bytes()
 
 
 def test_root_serves_landing_page(client):
@@ -36,6 +52,8 @@ def test_api_index(client):
     assert "medical" in data["databases"]
     assert any(item["path"] == "/patients" for item in data["example_endpoints"])
     assert any(item["path"] == "/db/medical/Patients?limit=10" for item in data["generic_explorer"])
+    assert any(item["path"] == "/upload" for item in data["upload_and_host"])
+    assert any(item["path"] == "/queryx" for item in data["upload_and_host"])
 
 
 def test_patients_route_returns_all_patients(client):
@@ -193,6 +211,188 @@ def test_api_index_lists_write_practice_endpoints(client):
     assert response.status_code == 200
     assert any(item["path"] == "/query" for item in data["write_practice"])
     assert any(item["path"] == "/reseed" for item in data["write_practice"])
+
+
+def test_upload_valid_sqlite_file_saves_to_sandbox(tmp_path, monkeypatch, client):
+    sandbox_dir = tmp_path / "sandbox"
+    monkeypatch.setattr(app_module, "SANDBOX_DIR", str(sandbox_dir))
+    db_bytes = sqlite_upload_bytes(tmp_path, "Things")
+
+    response = client.post(
+        "/upload",
+        data={
+            "name": "StudentWork.DB",
+            "file": (io.BytesIO(db_bytes), "ignored.db"),
+        },
+    )
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data["database"] == "studentwork.db"
+    assert data["tables"] == ["Things"]
+    assert (sandbox_dir / "studentwork.db").is_file()
+
+
+def test_upload_rejects_non_sqlite_bytes(tmp_path, monkeypatch, client):
+    monkeypatch.setattr(app_module, "SANDBOX_DIR", str(tmp_path / "sandbox"))
+
+    response = client.post(
+        "/upload",
+        data={"file": (io.BytesIO(b"not a sqlite database"), "notes.db")},
+    )
+
+    assert response.status_code == 400
+    assert "error" in response.get_json()
+
+
+def test_upload_rejects_bad_name(tmp_path, monkeypatch, client):
+    monkeypatch.setattr(app_module, "SANDBOX_DIR", str(tmp_path / "sandbox"))
+    db_bytes = sqlite_upload_bytes(tmp_path)
+
+    response = client.post(
+        "/upload",
+        data={
+            "name": "bad.name.db",
+            "file": (io.BytesIO(db_bytes), "student.db"),
+        },
+    )
+
+    assert response.status_code == 400
+    assert "error" in response.get_json()
+
+
+def test_upload_rejects_shared_database_collision(tmp_path, monkeypatch, client):
+    monkeypatch.setattr(app_module, "SANDBOX_DIR", str(tmp_path / "sandbox"))
+    db_bytes = sqlite_upload_bytes(tmp_path)
+
+    response = client.post(
+        "/upload",
+        data={
+            "name": "medical.db",
+            "file": (io.BytesIO(db_bytes), "student.db"),
+        },
+    )
+
+    assert response.status_code == 400
+    assert "error" in response.get_json()
+
+
+def test_gallery_lists_shared_databases(tmp_path, monkeypatch, client):
+    db_dir = tmp_path / "databases"
+    db_dir.mkdir()
+    build_sqlite_db(db_dir / "medical.db", "Patients")
+    build_sqlite_db(db_dir / "library.db", "Books")
+    (db_dir / "sandbox").mkdir()
+    (db_dir / "notes.txt").write_text("not a database")
+
+    monkeypatch.setattr(app_module, "DATABASE_DIR", str(db_dir))
+    monkeypatch.setattr(app_module, "SANDBOX_DIR", str(db_dir / "sandbox"))
+
+    response = client.get("/gallery")
+    data = response.get_json()
+    by_database = {item["database"]: item for item in data}
+
+    assert response.status_code == 200
+    assert set(by_database) == {"library.db", "medical.db"}
+    assert by_database["library.db"]["name"] == "library"
+    assert by_database["library.db"]["tables"] == ["Books"]
+    assert by_database["library.db"]["table_count"] == 1
+
+
+def test_mydbs_lists_and_deletes_sandbox_databases(tmp_path, monkeypatch, client):
+    sandbox_dir = tmp_path / "sandbox"
+    sandbox_dir.mkdir()
+    build_sqlite_db(sandbox_dir / "alpha.db", "Notes")
+    build_sqlite_db(sandbox_dir / "beta.db", "Tasks")
+
+    monkeypatch.setattr(app_module, "SANDBOX_DIR", str(sandbox_dir))
+
+    list_response = client.get("/mydbs")
+    delete_response = client.delete("/mydbs/alpha.db")
+    missing_response = client.delete("/mydbs/missing.db")
+    remaining_response = client.get("/mydbs")
+
+    assert list_response.status_code == 200
+    assert {item["database"] for item in list_response.get_json()} == {"alpha.db", "beta.db"}
+    assert delete_response.status_code == 200
+    assert not (sandbox_dir / "alpha.db").exists()
+    assert missing_response.status_code == 404
+    assert {item["database"] for item in remaining_response.get_json()} == {"beta.db"}
+
+
+def test_reseed_from_library_gallery_database(tmp_path, monkeypatch, client):
+    db_dir = tmp_path / "databases"
+    sandbox_dir = db_dir / "sandbox"
+    db_dir.mkdir()
+    build_sqlite_db(db_dir / "library.db", "Books")
+
+    monkeypatch.setattr(app_module, "DATABASE_DIR", str(db_dir))
+    monkeypatch.setattr(app_module, "SANDBOX_DIR", str(sandbox_dir))
+
+    reseed_response = client.post(
+        "/reseed",
+        json={"database": "mine.db", "from": "library.db"},
+    )
+    select_response = client.post(
+        "/query",
+        json={"database": "mine.db", "sql": "SELECT id, name FROM Books"},
+    )
+
+    assert reseed_response.status_code == 200
+    assert (sandbox_dir / "mine.db").is_file()
+    assert select_response.status_code == 200
+    assert select_response.get_json()["results"] == [{"id": 1, "name": "example"}]
+
+
+def test_queryx_accepts_db_name_for_shared_select(client):
+    response = client.post(
+        "/queryx",
+        json={
+            "db_name": "medical.db",
+            "sql": "SELECT * FROM Patients WHERE PatientID = 'P1'",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.get_json() == {
+        "results": [{"PatientID": "P1", "Patient": "Anika", "DOB": 1988}],
+        "count": 1,
+    }
+
+
+def test_queryx_can_write_to_sandbox_database(tmp_path, monkeypatch, client):
+    monkeypatch.setattr(app_module, "SANDBOX_DIR", str(tmp_path / "sandbox"))
+
+    create_response = client.post(
+        "/queryx",
+        json={
+            "db_name": "scratch.db",
+            "sql": "CREATE TABLE Notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)",
+        },
+    )
+    insert_response = client.post(
+        "/queryx",
+        json={
+            "db_name": "scratch.db",
+            "sql": "INSERT INTO Notes (body) VALUES ('from queryx')",
+        },
+    )
+    select_response = client.post(
+        "/queryx",
+        json={
+            "db_name": "scratch.db",
+            "sql": "SELECT id, body FROM Notes",
+        },
+    )
+
+    assert create_response.status_code == 200
+    assert insert_response.status_code == 200
+    assert insert_response.get_json()["rows_affected"] == 1
+    assert select_response.status_code == 200
+    assert select_response.get_json() == {
+        "results": [{"id": 1, "body": "from queryx"}],
+        "count": 1,
+    }
 
 
 def test_query_select_on_shared_medical_returns_row(client):
@@ -396,3 +596,69 @@ def test_query_multiple_statements_returns_400_not_500(tmp_path, monkeypatch, cl
 
     assert response.status_code == 400
     assert "error" in response.get_json()
+
+
+def test_query_attach_outside_sandbox_is_blocked(tmp_path, monkeypatch, client):
+    # A sandbox query must not be able to ATTACH (and thereby create) a file
+    # anywhere on disk. Otherwise a student could write arbitrary files.
+    monkeypatch.setattr(app_module, "SANDBOX_DIR", str(tmp_path / "sandbox"))
+    victim = tmp_path / "should_not_exist.db"
+
+    response = client.post(
+        "/query",
+        json={
+            "database": "attacker.db",
+            "sql": "ATTACH DATABASE '%s' AS evil" % victim,
+        },
+    )
+
+    assert response.status_code == 400
+    assert "not allowed" in response.get_json()["error"].lower()
+    assert not victim.exists()
+
+
+def test_query_attach_into_gallery_is_blocked(tmp_path, monkeypatch, client):
+    # ATTACH must not be able to drop a file into the shared gallery directory
+    # (which would appear as a fake read-only class database).
+    monkeypatch.setattr(app_module, "SANDBOX_DIR", str(tmp_path / "sandbox"))
+    gallery_before = {item["name"] for item in client.get("/gallery").get_json()}
+
+    response = client.post(
+        "/query",
+        json={
+            "database": "attacker.db",
+            "sql": "ATTACH DATABASE 'databases/pwned.db' AS g",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "not allowed" in response.get_json()["error"].lower()
+    gallery_after = {item["name"] for item in client.get("/gallery").get_json()}
+    assert "pwned" not in gallery_after
+    assert gallery_before == gallery_after
+    assert not os.path.exists(os.path.join(app_module.DATABASE_DIR, "pwned.db"))
+
+
+def test_query_recursive_cte_is_aborted_by_timeout(tmp_path, monkeypatch, client):
+    # An unbounded recursive CTE must be stopped by the statement deadline
+    # instead of pinning the worker forever.
+    monkeypatch.setattr(app_module, "SANDBOX_DIR", str(tmp_path / "sandbox"))
+    monkeypatch.setattr(app_module, "QUERY_TIMEOUT_SECONDS", 1)
+
+    started = time.monotonic()
+    response = client.post(
+        "/query",
+        json={
+            "database": "attacker.db",
+            "sql": (
+                "WITH RECURSIVE r(n) AS "
+                "(SELECT 1 UNION ALL SELECT n + 1 FROM r) "
+                "SELECT count(*) FROM r"
+            ),
+        },
+    )
+    elapsed = time.monotonic() - started
+
+    assert response.status_code == 400
+    assert "too long" in response.get_json()["error"].lower()
+    assert elapsed < 5

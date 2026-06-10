@@ -1,0 +1,759 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IA Database Host</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #17202a;
+      --muted: #657181;
+      --line: #d9e0e8;
+      --accent: #146c94;
+      --accent-dark: #0f5575;
+      --danger: #b42318;
+      --danger-bg: #fff1f0;
+      --ok: #13795b;
+      --ok-bg: #eefbf6;
+      --code: #202938;
+      --code-bg: #edf1f5;
+      --shadow: 0 8px 24px rgba(20, 34, 51, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .wrap {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 72px;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 1.45rem;
+      font-weight: 760;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 0.95rem;
+      margin-top: 2px;
+    }
+
+    main {
+      padding: 28px 0 44px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 18px;
+    }
+
+    @media (min-width: 940px) {
+      .grid {
+        grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+        align-items: start;
+      }
+    }
+
+    section {
+      margin-bottom: 18px;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .section-head h2 {
+      font-size: 0.86rem;
+      font-weight: 760;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #304054;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 12px;
+    }
+
+    .card,
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .card {
+      padding: 15px;
+      min-height: 156px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .panel {
+      padding: 16px;
+    }
+
+    .db-title {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .db-title h3 {
+      font-size: 1rem;
+      font-weight: 760;
+      overflow-wrap: anywhere;
+    }
+
+    .pill {
+      flex: 0 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      padding: 2px 8px;
+      background: #fbfcfd;
+    }
+
+    .tables {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-height: 28px;
+    }
+
+    .table-chip {
+      border-radius: 999px;
+      background: #eef3f7;
+      color: #2f4358;
+      padding: 3px 8px;
+      font-size: 0.78rem;
+      overflow-wrap: anywhere;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: auto;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    button {
+      border: 1px solid transparent;
+      background: var(--accent);
+      color: #ffffff;
+      border-radius: 6px;
+      padding: 8px 11px;
+      font-weight: 680;
+      cursor: pointer;
+      min-height: 38px;
+    }
+
+    button:hover {
+      background: var(--accent-dark);
+    }
+
+    button.secondary {
+      color: var(--accent);
+      background: #f5fbff;
+      border-color: #b9d8e8;
+    }
+
+    button.secondary:hover {
+      background: #e8f5fb;
+    }
+
+    button.danger {
+      color: var(--danger);
+      background: var(--danger-bg);
+      border-color: #f3c0bc;
+    }
+
+    button.danger:hover {
+      background: #ffe4e1;
+    }
+
+    label {
+      display: block;
+      font-size: 0.84rem;
+      font-weight: 700;
+      color: #334256;
+      margin-bottom: 6px;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid #cbd5df;
+      border-radius: 6px;
+      background: #ffffff;
+      color: var(--text);
+      padding: 10px 11px;
+      min-height: 40px;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 170px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      line-height: 1.45;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
+    }
+
+    @media (min-width: 700px) {
+      .form-grid.two {
+        grid-template-columns: minmax(0, 1fr) minmax(220px, 0.7fr);
+        align-items: end;
+      }
+    }
+
+    .status {
+      margin-top: 12px;
+      border-radius: 6px;
+      padding: 10px 11px;
+      color: var(--muted);
+      background: #f5f7fa;
+      border: 1px solid var(--line);
+      min-height: 42px;
+      overflow-wrap: anywhere;
+    }
+
+    .status.ok {
+      color: var(--ok);
+      background: var(--ok-bg);
+      border-color: #b8e7d6;
+    }
+
+    .status.error {
+      color: var(--danger);
+      background: var(--danger-bg);
+      border-color: #f3c0bc;
+    }
+
+    .console-actions {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: end;
+      margin: 12px 0;
+    }
+
+    @media (max-width: 560px) {
+      .console-actions {
+        grid-template-columns: 1fr;
+      }
+
+      button {
+        width: 100%;
+      }
+    }
+
+    .table-wrap {
+      width: 100%;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      margin-top: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 420px;
+    }
+
+    th,
+    td {
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      padding: 9px 10px;
+      vertical-align: top;
+      font-size: 0.9rem;
+    }
+
+    th {
+      background: #f3f6f9;
+      color: #344356;
+      font-weight: 760;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    pre {
+      margin: 12px 0 0;
+      background: var(--code-bg);
+      color: var(--code);
+      border-radius: 8px;
+      padding: 12px;
+      overflow: auto;
+      font-size: 0.86rem;
+      line-height: 1.45;
+    }
+
+    .log {
+      max-height: 220px;
+    }
+
+    .empty {
+      color: var(--muted);
+      background: #ffffff;
+      border: 1px dashed #c7d1dc;
+      border-radius: 8px;
+      padding: 16px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap topbar">
+      <div>
+        <h1>IA Database Host</h1>
+        <p class="subtitle">Try a gallery database, upload your own SQLite file, or build one with SQL.</p>
+      </div>
+      <button class="secondary" id="refreshAll" type="button">Refresh</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="grid">
+      <div>
+        <section>
+          <div class="section-head">
+            <h2>Gallery</h2>
+            <button class="secondary" id="refreshGallery" type="button">Reload</button>
+          </div>
+          <div class="cards" id="galleryCards"></div>
+        </section>
+
+        <section>
+          <div class="section-head">
+            <h2>Upload</h2>
+          </div>
+          <div class="panel">
+            <form id="uploadForm">
+              <div class="form-grid two">
+                <div>
+                  <label for="dbFile">SQLite .db file</label>
+                  <input id="dbFile" name="file" type="file" accept=".db,application/vnd.sqlite3,application/x-sqlite3">
+                </div>
+                <div>
+                  <label for="uploadName">Database name</label>
+                  <input id="uploadName" name="name" type="text" placeholder="my_project.db" autocomplete="off">
+                </div>
+              </div>
+              <div class="actions" style="margin-top: 12px;">
+                <button type="submit">Upload</button>
+              </div>
+            </form>
+            <div class="status" id="uploadStatus">No upload yet.</div>
+          </div>
+        </section>
+
+        <section>
+          <div class="section-head">
+            <h2>My Databases</h2>
+            <button class="secondary" id="refreshMine" type="button">Reload</button>
+          </div>
+          <div class="cards" id="myDbCards"></div>
+        </section>
+      </div>
+
+      <div>
+        <section>
+          <div class="section-head">
+            <h2>Run SQL</h2>
+          </div>
+          <div class="panel">
+            <label for="databaseSelect">Database</label>
+            <select id="databaseSelect"></select>
+
+            <label for="sqlBox" style="margin-top: 12px;">SQL</label>
+            <textarea id="sqlBox" spellcheck="false">SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name</textarea>
+
+            <div class="console-actions">
+              <div class="muted" id="consoleHint">Choose one of your databases.</div>
+              <button id="runSql" type="button">Run SQL</button>
+            </div>
+
+            <div id="queryResult"></div>
+
+            <h3 style="font-size: 0.95rem; margin-top: 18px;">Behind the scenes</h3>
+            <pre class="log" id="sqlLog">No SQL sent yet.</pre>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const state = {
+      gallery: [],
+      mydbs: [],
+      log: []
+    };
+
+    const galleryCards = document.getElementById("galleryCards");
+    const myDbCards = document.getElementById("myDbCards");
+    const uploadForm = document.getElementById("uploadForm");
+    const uploadStatus = document.getElementById("uploadStatus");
+    const databaseSelect = document.getElementById("databaseSelect");
+    const sqlBox = document.getElementById("sqlBox");
+    const queryResult = document.getElementById("queryResult");
+    const sqlLog = document.getElementById("sqlLog");
+    const consoleHint = document.getElementById("consoleHint");
+
+    async function requestJson(url, options = {}) {
+      const response = await fetch(url, options);
+      const text = await response.text();
+      let data = {};
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch (error) {
+          data = { error: text };
+        }
+      }
+      if (!response.ok) {
+        throw new Error(data.error || response.statusText || "Request failed");
+      }
+      return data;
+    }
+
+    function setStatus(element, message, kind = "") {
+      element.className = "status" + (kind ? " " + kind : "");
+      element.textContent = message;
+    }
+
+    function tableChips(tables) {
+      const box = document.createElement("div");
+      box.className = "tables";
+      if (!tables.length) {
+        const empty = document.createElement("span");
+        empty.className = "muted";
+        empty.textContent = "No tables";
+        box.appendChild(empty);
+        return box;
+      }
+      tables.forEach((table) => {
+        const chip = document.createElement("span");
+        chip.className = "table-chip";
+        chip.textContent = table;
+        box.appendChild(chip);
+      });
+      return box;
+    }
+
+    function databaseCard(item, mode) {
+      const card = document.createElement("article");
+      card.className = "card";
+
+      const title = document.createElement("div");
+      title.className = "db-title";
+      const h3 = document.createElement("h3");
+      h3.textContent = item.database;
+      const count = document.createElement("span");
+      count.className = "pill";
+      count.textContent = item.table_count + (item.table_count === 1 ? " table" : " tables");
+      title.append(h3, count);
+
+      const actions = document.createElement("div");
+      actions.className = "actions";
+
+      if (mode === "gallery") {
+        const copy = document.createElement("button");
+        copy.type = "button";
+        copy.textContent = "Copy to my databases";
+        copy.addEventListener("click", () => copyGallery(item));
+        actions.appendChild(copy);
+      } else {
+        const choose = document.createElement("button");
+        choose.type = "button";
+        choose.className = "secondary";
+        choose.textContent = "Use in console";
+        choose.addEventListener("click", () => {
+          databaseSelect.value = item.database;
+          databaseSelect.focus();
+        });
+
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "danger";
+        remove.textContent = "Delete";
+        remove.addEventListener("click", () => deleteDatabase(item.database));
+        actions.append(choose, remove);
+      }
+
+      card.append(title, tableChips(item.tables), actions);
+      return card;
+    }
+
+    function renderCards(container, items, mode, emptyText) {
+      container.textContent = "";
+      if (!items.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = emptyText;
+        container.appendChild(empty);
+        return;
+      }
+      items.forEach((item) => container.appendChild(databaseCard(item, mode)));
+    }
+
+    function renderDatabaseSelect() {
+      const selected = databaseSelect.value;
+      databaseSelect.textContent = "";
+      if (!state.mydbs.length) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = "No sandbox databases";
+        databaseSelect.appendChild(option);
+        databaseSelect.disabled = true;
+        consoleHint.textContent = "Copy, upload, or create a database first.";
+        return;
+      }
+
+      databaseSelect.disabled = false;
+      state.mydbs.forEach((item) => {
+        const option = document.createElement("option");
+        option.value = item.database;
+        option.textContent = item.database;
+        databaseSelect.appendChild(option);
+      });
+      if (state.mydbs.some((item) => item.database === selected)) {
+        databaseSelect.value = selected;
+      }
+      consoleHint.textContent = "Ready to send SQL to " + databaseSelect.value + ".";
+    }
+
+    async function loadGallery() {
+      galleryCards.textContent = "";
+      const loading = document.createElement("div");
+      loading.className = "empty";
+      loading.textContent = "Loading gallery databases.";
+      galleryCards.appendChild(loading);
+      try {
+        state.gallery = await requestJson("/gallery");
+        renderCards(galleryCards, state.gallery, "gallery", "No gallery databases found.");
+      } catch (error) {
+        renderCards(galleryCards, [], "gallery", error.message);
+      }
+    }
+
+    async function loadMyDbs() {
+      myDbCards.textContent = "";
+      const loading = document.createElement("div");
+      loading.className = "empty";
+      loading.textContent = "Loading your databases.";
+      myDbCards.appendChild(loading);
+      try {
+        state.mydbs = await requestJson("/mydbs");
+        renderCards(myDbCards, state.mydbs, "mydbs", "No sandbox databases yet.");
+      } catch (error) {
+        renderCards(myDbCards, [], "mydbs", error.message);
+      }
+      renderDatabaseSelect();
+    }
+
+    async function copyGallery(item) {
+      const target = "my_" + item.name + ".db";
+      try {
+        await requestJson("/reseed", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ database: target, from: item.database })
+        });
+        setStatus(uploadStatus, "Copied " + item.database + " to " + target + ".", "ok");
+        await loadMyDbs();
+      } catch (error) {
+        setStatus(uploadStatus, error.message, "error");
+      }
+    }
+
+    async function deleteDatabase(database) {
+      const confirmed = window.confirm("Delete " + database + "?");
+      if (!confirmed) {
+        return;
+      }
+      try {
+        await requestJson("/mydbs/" + encodeURIComponent(database), { method: "DELETE" });
+        await loadMyDbs();
+      } catch (error) {
+        setStatus(uploadStatus, error.message, "error");
+      }
+    }
+
+    uploadForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const formData = new FormData(uploadForm);
+      try {
+        const data = await requestJson("/upload", {
+          method: "POST",
+          body: formData
+        });
+        const tableText = data.tables.length ? data.tables.join(", ") : "no tables";
+        setStatus(uploadStatus, "Uploaded " + data.database + ". Tables: " + tableText + ".", "ok");
+        uploadForm.reset();
+        await loadMyDbs();
+      } catch (error) {
+        setStatus(uploadStatus, error.message, "error");
+      }
+    });
+
+    function addLog(payload) {
+      state.log.unshift(JSON.stringify(payload, null, 2));
+      state.log = state.log.slice(0, 8);
+      sqlLog.textContent = state.log.join("\n\n");
+    }
+
+    function renderQueryResult(data) {
+      queryResult.textContent = "";
+      if (!Array.isArray(data.results)) {
+        const pre = document.createElement("pre");
+        pre.textContent = JSON.stringify(data, null, 2);
+        queryResult.appendChild(pre);
+        return;
+      }
+
+      if (!data.results.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "Query returned 0 rows.";
+        queryResult.appendChild(empty);
+        return;
+      }
+
+      const columns = [...data.results.reduce((keys, row) => {
+        Object.keys(row).forEach((key) => keys.add(key));
+        return keys;
+      }, new Set())];
+
+      const wrap = document.createElement("div");
+      wrap.className = "table-wrap";
+      const table = document.createElement("table");
+      const thead = document.createElement("thead");
+      const headRow = document.createElement("tr");
+      columns.forEach((column) => {
+        const th = document.createElement("th");
+        th.textContent = column;
+        headRow.appendChild(th);
+      });
+      thead.appendChild(headRow);
+
+      const tbody = document.createElement("tbody");
+      data.results.forEach((row) => {
+        const tr = document.createElement("tr");
+        columns.forEach((column) => {
+          const td = document.createElement("td");
+          td.textContent = row[column] === null || row[column] === undefined ? "" : String(row[column]);
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+
+      table.append(thead, tbody);
+      wrap.appendChild(table);
+      queryResult.appendChild(wrap);
+    }
+
+    document.getElementById("runSql").addEventListener("click", async () => {
+      const database = databaseSelect.value;
+      const sql = sqlBox.value;
+      if (!database) {
+        renderQueryResult({ error: "Choose a sandbox database first." });
+        return;
+      }
+      const payload = { database, sql };
+      addLog(payload);
+      try {
+        const data = await requestJson("/query", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        renderQueryResult(data);
+        await loadMyDbs();
+      } catch (error) {
+        renderQueryResult({ error: error.message });
+      }
+    });
+
+    databaseSelect.addEventListener("change", () => {
+      consoleHint.textContent = databaseSelect.value
+        ? "Ready to send SQL to " + databaseSelect.value + "."
+        : "Choose one of your databases.";
+    });
+
+    document.getElementById("refreshGallery").addEventListener("click", loadGallery);
+    document.getElementById("refreshMine").addEventListener("click", loadMyDbs);
+    document.getElementById("refreshAll").addEventListener("click", async () => {
+      await Promise.all([loadGallery(), loadMyDbs()]);
+    });
+
+    Promise.all([loadGallery(), loadMyDbs()]);
+  </script>
+</body>
+</html>
